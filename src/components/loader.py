@@ -22,6 +22,8 @@ from langchain_community.document_loaders import TextLoader
 from langchain_community.document_loaders import UnstructuredHTMLLoader
 
 import pymupdf4llm
+from img2table.document import PDF, Image
+from img2table.ocr import TesseractOCR
 from loguru import logger
 from aiopath import AsyncPath
 from typing import Dict
@@ -212,6 +214,7 @@ class CustomPyMuPDFLoader(BaseLoader):
             **self.loader_args
         )
         pages = await loader.aload()
+        pages = self.add_tables(file_path, pages)
         return Document(
             page_content=f'{self.page_sep}'.join([p.page_content for p in pages]), 
             metadata={
@@ -219,7 +222,27 @@ class CustomPyMuPDFLoader(BaseLoader):
                 'page_sep': self.page_sep
             }
         )
-
+    @staticmethod
+    def add_tables(file_path, pages):
+        """Extract tables from PDF file and add them to the page content"""
+        
+        ocr = TesseractOCR(n_threads=1, lang="eng")
+        doc = PDF(str(file_path))
+        extracted_tables = doc.extract_tables(
+            ocr=ocr,
+            implicit_rows=True,
+            implicit_columns=True,
+            borderless_tables=False,
+            min_confidence=50
+            )
+        # Loop through the pages and tables to combine content
+        for i,p in enumerate(pages):
+            p.page_content += '\n'
+            tables = extracted_tables[i]
+            for t in tables :
+                p.page_content += f'\n{t.title}\n{t.df.to_markdown()}'
+        return pages
+    
 class CustomTextLoader(BaseLoader):
     def __init__(self, page_sep: str='[PAGE_SEP]', **loader_args) -> None:
         self.loader_args = loader_args
