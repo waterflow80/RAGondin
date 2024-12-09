@@ -99,8 +99,8 @@ async def hello():
     return "hello"
 
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000) # 8083
+#if __name__ == "__main__":
+#    uvicorn.run(app, host="0.0.0.0", port=8000) # 8083
 
 # uvicorn fast_api:app --reload --port 8082
 

@@ -1,15 +1,18 @@
-version: '3.9'
-
 services:
+  qdrant:
+    image: qdrant/qdrant
+    container_name: qdrant
+    volumes:
+      - ./qdrant_storage:/qdrant/storage:z
   chainlit-app:
     image: ${IMAGE_NAME}:${TAG}
     container_name: ${CONTAINER_NAME}
     working_dir: /${WORKDIR}
     volumes:
-      - ${PWD}/README.md:/${WORKDIR}/README.md
-      - ${PWD}/pyproject.toml:/${WORKDIR}/pyproject.toml
-      - ${PWD}/poetry.lock:/${WORKDIR}/poetry.lock
-      - ${PWD}/chainlit_app.py:/${WORKDIR}/chainlit_app.py
+      - ./README.md:/${WORKDIR}/README.md
+      - ./pyproject.toml:/${WORKDIR}/pyproject.toml
+      - ./poetry.lock:/${WORKDIR}/poetry.lock
+      - ./chainlit_app.py:/${WORKDIR}/chainlit_app.py
       - venv:/${WORKDIR}/${ENVS_PATH}/${VENV_NAME}
       - hydra_config:/${WORKDIR}/${CONFIG_PATH}
       - chainlit_app:/${WORKDIR}/app
@@ -22,27 +25,24 @@ services:
       - POETRY_VIRTUALENVS_PATH=/${WORKDIR}/${ENVS_PATH}/${VENV_NAME}
       - POETRY_VIRTUALENVS_CREATE=true
       - POETRY_VIRTUALENVS_IN_PROJECT=false
-
-    network_mode: bridge
-
     
     ports:
       - "${APP_PORT}:${APP_PORT}"
     env_file:
-      - .env.compose
+      - .env
+    
+    depends_on:
+      - qdrant
 
     
     command: >
       bash -c "
         echo 'PATH: $PATH' && \
         
-        if [ ! -f poetry.lock ] || [ pyproject.toml -nt poetry.lock ]; then
-          echo 'Installing dependencies...' && \
-          poetry env use python3.12 && \
-          poetry install --no-interaction -vv --no-root; 
-        else
-          echo 'Dependencies are up to date';
-        fi && \
+        echo 'Installing dependencies...' && \
+        poetry env use python3.12 && \
+        poetry install --no-interaction -vv --no-root; 
+
         echo 'Current environment variables:' && \
         printenv && \
         echo 'Container is running. Use docker exec -it RAGondin bash to connect.' && \
@@ -63,28 +63,28 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: '${PWD}/${CONFIG_PATH}'
+      device: './${CONFIG_PATH}'
 
   venv:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: '${PWD}/${ENVS_PATH}/RAGondin_rag_chainlit'
+      device: './${ENVS_PATH}/RAGondin_rag_chainlit'
 
   chainlit_app:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: '${PWD}/app'
+      device: './app'
 
   source:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: '${PWD}/src'
+      device: './src'
 
 
   pickled_weights:
@@ -92,7 +92,7 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: '${PWD}/model_weights'
+      device: './model_weights'
 
 
   visual_assets:
@@ -100,4 +100,4 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: '${PWD}/public'
+      device: './public'
