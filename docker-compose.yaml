@@ -13,12 +13,15 @@ services:
       - ./pyproject.toml:/${WORKDIR}/pyproject.toml
       - ./poetry.lock:/${WORKDIR}/poetry.lock
       - ./chainlit_app.py:/${WORKDIR}/chainlit_app.py
+      - ./fast_api.py:/${WORKDIR}/fast_api.py
       - venv:/${WORKDIR}/${ENVS_PATH}/${VENV_NAME}
       - hydra_config:/${WORKDIR}/${CONFIG_PATH}
       - chainlit_app:/${WORKDIR}/app
       - source:/${WORKDIR}/src
       - pickled_weights:/${WORKDIR}/model_weights
       - visual_assets:/${WORKDIR}/public
+      - ./data:/${WORKDIR}/data  # PDF data for RAG
+
 
     
     environment:
@@ -46,7 +49,7 @@ services:
         echo 'Current environment variables:' && \
         printenv && \
         echo 'Container is running. Use docker exec -it RAGondin bash to connect.' && \
-        poetry run chainlit run chainlit_app.py --watch --host ${APP_HOST} --port ${APP_PORT}
+        poetry run uvicorn fast_api:app --host ${APP_HOST} --port ${APP_PORT} --reload
       "
     deploy:
       resources:
