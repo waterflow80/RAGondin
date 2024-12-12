@@ -14,7 +14,7 @@ services:
       - ./poetry.lock:/${WORKDIR}/poetry.lock
       - ./chainlit_app.py:/${WORKDIR}/chainlit_app.py
       - ./fast_api.py:/${WORKDIR}/fast_api.py
-      - venv:/${WORKDIR}/${ENVS_PATH}/${VENV_NAME}
+      - rag_venv:/${WORKDIR}/${ENVS_PATH}/${VENV_NAME}
       - hydra_config:/${WORKDIR}/${CONFIG_PATH}
       - chainlit_app:/${WORKDIR}/app
       - source:/${WORKDIR}/src
@@ -68,7 +68,7 @@ volumes:
       o: bind
       device: './${CONFIG_PATH}'
 
-  venv:
+  rag_venv:
     driver: local
     driver_opts:
       type: none
