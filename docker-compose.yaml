@@ -5,7 +5,8 @@ services:
     volumes:
       - ./qdrant_storage:/qdrant/storage:z
   chainlit-app:
-    image: ${IMAGE_NAME}:${TAG}
+    build: 
+      dockerfile: Dockerfile
     container_name: ${CONTAINER_NAME}
     working_dir: /${WORKDIR}
     volumes:
@@ -49,8 +50,7 @@ services:
         echo 'Current environment variables:' && \
         printenv && \
         echo 'Container is running. Use docker exec -it RAGondin bash to connect.' && \
-        poetry run uvicorn fast_api:app --host ${APP_HOST} --port ${APP_PORT} --reload
-      "
+        poetry run uvicorn fast_api:app --host ${APP_HOST} --port ${APP_PORT}
     deploy:
       resources:
         reservations:
