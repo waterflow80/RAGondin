@@ -6,7 +6,7 @@ import time
 import os
 from loguru import logger
 from qdrant_client import QdrantClient
-from src.components import load_config, Indexer
+from components import load_config, Indexer
 
 config = load_config()
 
