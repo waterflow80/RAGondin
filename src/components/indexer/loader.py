@@ -29,6 +29,10 @@ from typing import Dict
 from docling_core.types.doc.document import PictureItem
 from docling.datamodel.document import ConversionResult
 
+from marker.converters.pdf import PdfConverter
+from marker.models import create_model_dict
+from marker.config.parser import ConfigParser
+
 from tqdm.asyncio import tqdm
 
 # from langchain_community.document_loaders import UnstructuredXMLLoader, PyPDFLoader
@@ -452,6 +456,32 @@ class DoclingLoader(BaseLoader):
                 'page_sep': self.page_sep
             }
         )
+    
+class MarkerLoader(BaseLoader):
+    def __init__(self, page_sep: str='------------------------------------------------\n\n', **kwargs) -> None:
+        self.page_sep = page_sep
+        self.converter = PdfConverter(
+            artifact_dict=create_model_dict()
+            # config=ConfigParser(
+            #     cli_options={
+            #         'paginate_output': True
+            #     }
+            # )
+        )
+    
+    async def aload_document(self, file_path, sub_url_path: str = ''):
+        file_path = str(file_path)
+        print(f"==> Loading: {file_path}")
+        render = self.converter(file_path)
+        return Document(
+            page_content=render.markdown, 
+            metadata={
+                'source': str(file_path),
+                'sub_url_path': sub_url_path,
+                'page_sep': self.page_sep
+            }
+        )
+        
 
 
 class DocSerializer:
@@ -512,7 +542,7 @@ async def get_files(path, pattern, recursive) -> AsyncGenerator:
 
 # TODO create a Meta class that aggregates registery of supported documents from each child class
 LOADERS: Dict[str, BaseLoader] = {
-    '.pdf': DoclingLoader, # CustomPyMuPDFLoader, # 
+    '.pdf': DoclingLoader, # CustomPyMuPDFLoader, # DoclingLoader, # MarkerLoader
     '.docx': CustomDocLoader,
     '.doc': CustomDocLoader,
     '.odt': CustomDocLoader,
