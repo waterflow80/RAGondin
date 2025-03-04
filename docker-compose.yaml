@@ -2,9 +2,9 @@ services:
   qdrant:
     image: qdrant/qdrant
     volumes:
-      - ./qdrant_storage:/qdrant/storage:z
+      - qdrant_storage:/qdrant/storage #./qdrant_storage:/qdrant/storage:z
     ports:
-      - "6333:6333"
+      - "6335:6333"
   chainlit-app:
     build: 
       dockerfile: Dockerfile
@@ -23,7 +23,7 @@ services:
     
     command: >
       bash -c "
-        uv run uvicorn api:app --host ${APP_HOST} --port ${APP_PORT}
+        uv run uvicorn api:app --host ${APP_HOST} --port ${APP_PORT} --reload
       "
     deploy:
       resources:
@@ -32,3 +32,6 @@ services:
             - driver: nvidia
               count: all 
               capabilities: [gpu]
+
+volumes:
+  qdrant_storage:
