@@ -3,7 +3,7 @@ from abc import abstractmethod, ABC
 import asyncio
 from pathlib import Path
 from .llm import LLM
-from .indexer import ABCVectorDB, QdrantDB
+from .indexer import ABCVectorDB, QdrantDB, MilvusDB
 from langchain_core.prompts import ChatPromptTemplate
 from .utils import load_sys_template
 from langchain_openai import ChatOpenAI
@@ -23,7 +23,7 @@ class ABCRetriever(ABC):
         pass
 
     @abstractmethod
-    async def retrieve(self, question: str, db: QdrantDB) -> list[Document]:
+    async def retrieve(self, question: str, db: ABCVectorDB) -> list[Document]:
         pass
 
 
@@ -103,7 +103,7 @@ class MultiQueryRetriever(BaseRetriever):
             raise KeyError(f"An Error has occured: {e}")
 
     
-    async def retrieve(self, question: str, db: QdrantDB) -> list[Document]:
+    async def retrieve(self, question: str, db: ABCVectorDB) -> list[Document]:
         # generate different perspectives of the question
         generated_questions = await self.generate_queries.ainvoke(
             {
