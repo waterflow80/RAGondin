@@ -19,13 +19,10 @@ from chainlit.utils import mount_chainlit
 from routers.indexer import router as indexer_router
 from utils.dependencies import indexer
 
-APP_DIR = Path.cwd()
-DATA_DIR = APP_DIR / 'data'
-# Directory to store uploaded PDFs
-UPLOAD_DIR = APP_DIR / 'data' / "upload_dir"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 config = load_config()
+
+DATA_DIR = config.paths.data_dir
 
 logger.info(f"VectorDB host: {config.vectordb['host']}")
 logger.info(f"VectorDB port: {config.vectordb['port']}")

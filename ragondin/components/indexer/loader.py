@@ -8,7 +8,7 @@ from components.utils import SingletonMeta
 from pydub import AudioSegment
 import torch
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import AsyncGenerator,Optional, Dict
 from langchain_core.documents.base import Document
 from langchain_community.document_loaders import (
     PyMuPDFLoader, 
@@ -38,7 +38,7 @@ from tqdm.asyncio import tqdm
 
 class BaseLoader(ABC):
     @abstractmethod
-    async def aload_document(self, file_path, sub_url_path: str =''):
+    async def aload_document(self, file_path, metadata: dict = None):
         pass
 
 
@@ -46,7 +46,7 @@ class Custompymupdf4llm(BaseLoader):
     def __init__(self, page_sep: str='[PAGE_SEP]', config=None, **kwargs) -> None:
         self.page_sep = page_sep
     
-    async def aload_document(self, file_path, sub_url_path: str =''):
+    async def aload_document(self, file_path, metadata: dict = None):
         pages = pymupdf4llm.to_markdown(
             file_path,
             write_images=False,
@@ -55,11 +55,7 @@ class Custompymupdf4llm(BaseLoader):
         page_content = f'{self.page_sep}'.join([p['text'] for p in pages])
         return Document(
             page_content=page_content, 
-            metadata={
-                'source': str(file_path),
-                'sub_url_path': sub_url_path,
-                'page_sep': self.page_sep
-            }
+            metadata=metadata
         )
 
 
@@ -85,7 +81,7 @@ class VideoAudioLoader(BaseLoader):
         gc.collect()
         torch.cuda.empty_cache()
 
-    async def aload_document(self, file_path, sub_url_path: str = ''):
+    async def aload_document(self, file_path, metadata: dict = None):
         path = Path(file_path)
         if path.suffix not in self.formats:
             logger.warning(
@@ -118,11 +114,7 @@ class VideoAudioLoader(BaseLoader):
 
         return Document(
             page_content=f"{content}{self.page_sep}",
-            metadata={
-                'source': str(file_path),
-                'sub_url_path': sub_url_path,
-                'page_sep': self.page_sep
-            }
+            metadata=metadata
         )
 
 
@@ -159,7 +151,7 @@ class CustomPPTLoader(BaseLoader):
                 grouped_elements[doc.metadata.get('element_id')].append(doc)
         return grouped_elements
     
-    async def aload_document(self, file_path, sub_url_path: str = ''):
+    async def aload_document(self, file_path, metadata: dict = None):
         path = Path(file_path)
         cls_loader = CustomPPTLoader.doc_loaders.get(path.suffix, None)
 
@@ -200,46 +192,34 @@ class CustomPPTLoader(BaseLoader):
 
         return Document(
             page_content=content, 
-            metadata={
-                'source': str(file_path),
-                'sub_url_path': sub_url_path,
-                'page_sep': self.page_sep
-            }
+            metadata=metadata
         )
 
 class CustomPyMuPDFLoader(BaseLoader):
     def __init__(self, page_sep: str='[PAGE_SEP]', **kwargs) -> None:
         self.page_sep = page_sep
 
-    async def aload_document(self, file_path, sub_url_path: str = ''):
+    async def aload_document(self, file_path, metadata: dict = None):
         loader = PyMuPDFLoader(
             file_path=Path(file_path),
         )
         pages = await loader.aload()
         return Document(
             page_content=f'{self.page_sep}'.join([p.page_content for p in pages]), 
-            metadata={
-                'source': str(file_path),
-                'sub_url_path': sub_url_path,
-                'page_sep': self.page_sep
-            }
+            metadata=metadata
         )
 
 class CustomTextLoader(BaseLoader):
     def __init__(self, page_sep: str='[PAGE_SEP]', **kwargs) -> None:
         self.page_sep = page_sep
 
-    async def aload_document(self, file_path, sub_url_path: str = ''):
+    async def aload_document(self, file_path, metadata: dict = None):
         path = Path(file_path)
         loader = TextLoader(file_path=str(path), autodetect_encoding=True)
         doc = await loader.aload()
         return Document(
             page_content=f'{self.page_sep}'.join([p.page_content for p in doc]), 
-            metadata={
-                'source': str(file_path),
-                'sub_url_path': sub_url_path,
-                'page_sep': self.page_sep
-            }
+            metadata=metadata
         )
     
 
@@ -247,17 +227,13 @@ class CustomHTMLLoader(BaseLoader):
     def __init__(self, page_sep: str='[PAGE_SEP]', **kwargs) -> None:
         self.page_sep = page_sep
 
-    async def aload_document(self, file_path, sub_url_path: str = ''):
+    async def aload_document(self, file_path, metadata: dict = None):
         path = Path(file_path)
         loader = UnstructuredHTMLLoader(file_path=str(path), autodetect_encoding=True)
         doc = await loader.aload()
         return Document(
             page_content=f'{self.page_sep}'.join([p.page_content for p in doc]), 
-            metadata={
-                'source': str(file_path),
-                'sub_url_path': sub_url_path,
-                'page_sep': self.page_sep
-            }
+            metadata=metadata
         )
 
 
@@ -272,7 +248,7 @@ class CustomDocLoader(BaseLoader):
         self.page_sep = page_sep
     
     
-    async def aload_document(self, file_path, sub_url_path: str = ''):
+    async def aload_document(self, file_path, metadata: dict = None):
         path = Path(file_path)
         cls_loader = CustomDocLoader.doc_loaders.get(path.suffix, None)
 
@@ -288,11 +264,7 @@ class CustomDocLoader(BaseLoader):
 
         return Document(
             page_content=f"{content}{self.page_sep}", 
-            metadata={
-                'source': str(file_path),
-                'sub_url_path': sub_url_path,
-                'page_sep': self.page_sep
-            }
+            metadata=metadata
         )
     
 
@@ -441,15 +413,11 @@ class DoclingLoader(BaseLoader):
         llm_config = kwargs.get('llm_config')
         self.converter = DoclingConverter(llm_config=llm_config)
     
-    async def aload_document(self, file_path, sub_url_path: str = ''):
+    async def aload_document(self, file_path, metadata: dict = None):
         content = await self.converter.parse(file_path, page_seperator=self.page_sep)
         return Document(
             page_content=content, 
-            metadata={
-                'source': str(file_path),
-                'sub_url_path': sub_url_path,
-                'page_sep': self.page_sep
-            }
+            metadata=metadata
         )
 
 
@@ -459,29 +427,31 @@ class DocSerializer:
         self.kwargs = kwargs
     
     # TODO: Add delete class obj
-    async def serialize_document(self, path: str):
+    async def serialize_document(self, path: str, metadata: Optional[Dict] = None):
         p = AsyncPath(path)
         if await p.is_file():
             type_ = p.suffix
             loader_cls: BaseLoader = LOADERS.get(type_)
             logger.info(f'Loading {type_} files.')
-
+            sub_url_path = Path(path).absolute().relative_to(self.data_dir)
             loader = loader_cls(**self.kwargs)  # Propagate kwargs here!
+            metadata={**{'source': str(path),'file_name': path.name ,'sub_url_path': sub_url_path,'page_sep': loader.page_sep},**metadata}
+            logger.info(f"doc metadata: {metadata}")
             doc: Document = await loader.aload_document(
                 file_path=path,
-                sub_url_path=Path(path).absolute().relative_to(self.data_dir) # for the static file server
-            )
+                metadata=metadata
+                )
             yield doc
 
-    async def serialize_documents(self, path: str | Path | list[str], recursive=True) -> AsyncGenerator[Document, None]:
+    async def serialize_documents(self, path: str | Path | list[str],metadata: Optional[Dict] = None, recursive=True) -> AsyncGenerator[Document, None]:
         if isinstance(path, list): # list of file paths
             for file_path in path:
-                async for doc in self.serialize_document(file_path):
+                async for doc in self.serialize_document(file_path, metadata):
                     yield doc
         else:
             p = AsyncPath(path)
             if await p.is_file():
-                async for doc in self.serialize_document(path):
+                async for doc in self.serialize_document(path, metadata):
                     yield doc
 
             is_dir = await p.is_dir()

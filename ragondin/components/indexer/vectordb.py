@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABC
 import asyncio
-from typing import Union
+from typing import Union, Optional, Dict
 from qdrant_client import QdrantClient, models
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -23,11 +23,11 @@ class ABCVectorDB(ABC):
         pass
 
     @abstractmethod
-    async def async_add_documents(self, index_name, chunks, embeddings):
+    async def async_add_documents(self, index_name, chunks, embeddings, collection_name : Optional[str] = None):
         pass
 
     @abstractmethod
-    async def async_search(self, query: str, top_k: int = 5) -> list[Document]:
+    async def async_search(self, query: str, top_k: int = 5, collection_name: str = None) -> list[Document]:
         pass
     
     @abstractmethod
@@ -111,7 +111,9 @@ class QdrantDB(ABCVectorDB):
     async def get_collections(self) -> list[str]:
         return [c.name for c in self.client.get_collections().collections]
 
-    async def async_search(self, query: str, top_k: int = 5, similarity_threshold: int=0.80) -> list[Document]:
+    async def async_search(self, query: str, top_k: int = 5, similarity_threshold: int=0.80, collection_name: str = None) -> list[Document]:
+        if collection_name:
+            self.collection_name = collection_name
         docs_scores = await self.vector_store.asimilarity_search_with_relevance_scores(query=query, k=top_k, score_threshold=similarity_threshold)
         docs = [doc for doc, score in docs_scores]
         return docs
@@ -138,7 +140,8 @@ class QdrantDB(ABCVectorDB):
             chunker: ABCChunker, 
             document_batch_size: int=6,
             max_concurrent_gpu_ops: int=5,
-            max_queued_batches: int=2
+            max_queued_batches: int=2,
+            collection_name: Optional[str]=None
         ) -> None:
         """
         Asynchronously process documents through a GPU-based chunker using a producer-consumer pattern.
@@ -154,6 +157,9 @@ class QdrantDB(ABCVectorDB):
             max_concurrent_gpu_ops (int): Maximum number of concurrent GPU operations. Default: 5
             max_queued_batches (int): Number of batches to prepare ahead in queue. Default: 2
         """
+        if collection_name:
+            self.collection_name = collection_name
+
         gpu_semaphore = asyncio.Semaphore(max_concurrent_gpu_ops) # Only allow max_concurrent_gpu_ops GPU operation at a time
         batch_queue = asyncio.Queue(maxsize=max_queued_batches)
 

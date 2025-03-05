@@ -1,6 +1,6 @@
 from omegaconf import OmegaConf
 from .loader import DocSerializer
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Dict, List, Optional, Union
 from .embeddings import HFEmbedder
 from .chunker import ABCChunker, ChunkerFactory
 from .vectordb import ConnectorFactory, ABCVectorDB
@@ -19,16 +19,17 @@ class Indexer:
         self.logger = logger
         self.logger.info("Indexer initialized...")
         
-    async def add_files2vdb(self, path: str | list[str]):
+    async def add_files2vdb(self, path: str | list[str], metadata: Optional[Dict] = None, collection_name : Optional[str] = None):
         """Add a files to the vector database in async mode"""
         try:
-            doc_generator: AsyncGenerator[Document, None] = self.serializer.serialize_documents(path, recursive=True)
+            doc_generator: AsyncGenerator[Document, None] = self.serializer.serialize_documents(path, metadata=metadata ,recursive=True)
             await self.vectordb.async_add_documents(
                 doc_generator=doc_generator, 
                 chunker=self.chunker, 
                 document_batch_size=2,
                 max_concurrent_gpu_ops=3,
-                max_queued_batches=2
+                max_queued_batches=2,   
+                collection_name=collection_name
             )
             self.logger.info(f"Documents from {path} added.")
         except Exception as e:
