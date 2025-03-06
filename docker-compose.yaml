@@ -1,3 +1,5 @@
+include:
+  - vdb/${VDB_HOST}.yaml
 services:
   qdrant:
     image: qdrant/qdrant
@@ -17,8 +19,7 @@ services:
       - .env
     
     depends_on:
-      - qdrant
-
+      - ${VDB_HOST}
     deploy:
       resources:
         reservations:

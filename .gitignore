@@ -43,3 +43,5 @@ kotaemon
 ./temps_img
 .python-version
 .vscode
+
+vdb/volumes/
