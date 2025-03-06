@@ -8,5 +8,5 @@ class SearchRequest(BaseModel):
 
 
 class DeleteFilesRequest(BaseModel):
-    file_names: List[str]
+    filters: Union[Dict, List[Dict]]
     collection_name: Optional[str] = None

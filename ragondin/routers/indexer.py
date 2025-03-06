@@ -51,6 +51,7 @@ async def add_files(
         for i, file in enumerate(files):
             file_path = save_dir / Path(file.filename).name
             logger.info(f"Processing file: {file.filename} and saving to {file_path}")
+            logger.info(f"Metadata: {metadata[i]}")
             with open(file_path, "wb") as buffer:
                 buffer.write(await file.read())
             # Now pass the file path to the Indexer
@@ -75,7 +76,7 @@ async def search(query_params: SearchRequest, qdrant_crud: QdrantCRUD = Depends(
         documents = [{"page_content": doc.page_content, "metadata": doc.metadata} for doc in results]
         
         # Return results
-        return JSONResponse(content={f"Results in collection {collection_name}": documents}, status_code=200)
+        return JSONResponse(content={f"Documents": documents}, status_code=200)
 
     except Exception as e:
         # Handle errors
@@ -93,10 +94,22 @@ async def delete_files(request : DeleteFilesRequest, qdrant_crud: QdrantCRUD = D
     Returns:
         JSONResponse: A confirmation message including details of files processed.
     """
-
+    # Check filters format
+    filters = request.filters
+    if isinstance(filters, dict):
+        if len(filters) != 1:
+            raise HTTPException(status_code=400, detail="Each filter must be a dictionary with exactly one key-value pair.")
+        filters = [filters]
+    elif isinstance(filters, list):
+        for f in filters:
+            if not isinstance(f, dict) or len(f) != 1:
+                raise HTTPException(status_code=400, detail="Each filter must be a dictionary with exactly one key-value pair.")
+    else:
+        raise HTTPException(status_code=400, detail="Filters must be a dictionary or a list of dictionaries.")
+        
     try:
         collection_name = request.collection_name if request.collection_name else config.vectordb.collection_name
-        deleted_files, not_found_files = qdrant_crud.delete_files(request.file_names, collection_name)
+        deleted_files, not_found_files = qdrant_crud.delete_files(filters, collection_name)
         return {
             "message": "File processing completed.",
             "files_deleted": deleted_files,
@@ -106,3 +119,43 @@ async def delete_files(request : DeleteFilesRequest, qdrant_crud: QdrantCRUD = D
     except Exception as e:
         # Handle errors
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sync-db/", response_model=None)
+async def sync_db(qdrant_crud: QdrantCRUD = Depends(get_qdrant_crud)):
+    try:
+        data_dir = Path(DATA_DIR)
+        if not data_dir.exists():
+            raise HTTPException(status_code=400, detail="DATA_DIR does not exist")
+
+        sync_summary = {}
+
+        for collection_path in data_dir.iterdir():
+            if collection_path.is_dir():  # Ensure it's a collection folder
+                collection_name = collection_path.name
+                up_to_date_files = []
+                missing_files = []
+
+                for file_path in collection_path.iterdir():
+                    if file_path.is_file() and file_path.suffix != ".md":
+                        if qdrant_crud.file_exists(file_path.name, collection_name):
+                            up_to_date_files.append(file_path.name)
+                        else:
+                            missing_files.append(file_path.name)
+                            await qdrant_crud.add_files(path=file_path, metadata={}, collection_name=collection_name)
+
+                if not missing_files:
+                    logger.info(f"Collection '{collection_name}' is already up to date.")
+                else:
+                    logger.info(f"Collection '{collection_name}' updated. Added files: {missing_files}")
+
+                sync_summary[collection_name] = {
+                    "up_to_date": up_to_date_files,
+                    "added": missing_files
+                }
+
+        return JSONResponse(content={"message": "Database sync completed.", "details": sync_summary}, status_code=200)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

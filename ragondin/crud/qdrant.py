@@ -27,7 +27,7 @@ class QdrantCRUD :
         return await self.indexer.vectordb.async_search(query, top_k, collection_name=collection_name)
 
 
-    def get_file_points(self, file_name: str, collection_name):
+    def get_file_points(self, filter: dict, collection_name):
         """
         Get the points associated with a file from Qdrant
         """
@@ -37,10 +37,13 @@ class QdrantCRUD :
             offset = None
             results = []
 
+            key = next(iter(filter))
+            value = filter[key]
+
             while has_more:
                 response = self.indexer.vectordb.client.scroll(
                     collection_name=collection_name if collection_name else self.collection_name,
-                    scroll_filter=models.Filter(must=[models.FieldCondition(key="metadata.file_name",match=models.MatchValue(value=file_name))]),
+                    scroll_filter=models.Filter(must=[models.FieldCondition(key=f"metadata.{key}",match=models.MatchValue(value=value))]),
                     limit=100,
                     offset=offset,
                 )
@@ -54,7 +57,7 @@ class QdrantCRUD :
             return [res.id for res in results]
         
         except Exception as e:
-            self.logger.error(f"Couldn't get file points for file {file_name}: {e}")
+            self.logger.error(f"Couldn't get file points for {key} {value}: {e}")
             raise
 
 
@@ -70,28 +73,43 @@ class QdrantCRUD :
         except Exception as e:
             self.logger.error(f"Error in `delete_points`: {e}")
     
-    def delete_files(self, file_names: List[str], collection_name: Optional[str] = None):
+    def delete_files(self, filters: Union[Dict, List[Dict]], collection_name: Optional[str] = None):
         deleted_files = []
         not_found_files = []
 
-        for file_name in file_names:
+
+        for filter in filters:
             try:
+                key = next(iter(filter))
+                value = filter[key]
                 # Get points associated with the file name
-                points = self.get_file_points(file_name, collection_name)
-                print(file_name, len(points))
+                points = self.get_file_points(filter, collection_name)
                 if not points:
-                    self.logger.info(f"No points found for file: {file_name}")
-                    not_found_files.append(file_name)
+                    self.logger.info(f"No points found for {key}: {value}")
+                    not_found_files.append(filter)
                     continue
 
                 # Delete the points
                 self.delete_points(points, collection_name)
-                deleted_files.append(file_name)
+                deleted_files.append(filter)
 
             except Exception as e:
-                self.logger.error(f"Error in `delete_files` for file {file_name}: {e}")
+                self.logger.error(f"Error in `delete_files` for {key} {value}: {e}")
         
         return deleted_files, not_found_files
+
+
+    def file_exists(self, file_name: str, collection_name: Optional[str] = None):
+        """
+        Check if a file exists in Qdrant
+        """
+        try:
+            # Get points associated with the file name
+            points = self.get_file_points({"file_name": file_name}, collection_name)
+            return True if points else False
+        except Exception as e:
+            self.logger.error(f"Error in `file_exists` for {file_name}: {e}")
+            return False
 
     def update_file ():
         pass
