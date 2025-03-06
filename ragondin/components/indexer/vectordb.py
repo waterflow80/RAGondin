@@ -69,126 +69,126 @@ class MilvusDB(ABCVectorDB):
         if collection_name:
             self.collection_name = collection_name
 
-        @property
-        def collection_name(self):
-            return self._collection_name
-        
-        @collection_name.setter
-        def collection_name(self, name: str):
-            if not name:
-                raise ValueError("Collection name cannot be empty.")
-            
-            if self.client.has_collection(collection_name=name):
-                self.vector_store = Milvus(
-                    client=self.client,
-                    collection_name=name,
-                    embedding=self.embeddings,
-                    sparse_embedding=self.sparse_embeddings,
-                    retrieval_mode=self.retrieval_mode,
-                ) 
-                self.logger.warning(f"The Collection named `{name}` loaded.")
-            else:
-                self.vector_store = Milvus.construct_instance(
-                    embedding=self.embeddings,
-                    sparse_embedding=self.sparse_embeddings,
-                    collection_name=name,
-                    client_options={'port': self.port, 'host':self.host},
-                    retrieval_mode=self.retrieval_mode,
-                )
-                self.logger.info(f"As the collection `{name}` is non-existant, it's created.")
+    @property
+    def collection_name(self):
+        return self._collection_name
     
-        async def get_collections(self) -> list[str]:
-            return [c.name for c in self.client.list_collections()]
+    @collection_name.setter
+    def collection_name(self, name: str):
+        if not name:
+            raise ValueError("Collection name cannot be empty.")
         
-        async def async_search(self, query: str, top_k: int = 5,similarity_threshold: int=0.80) -> list[Document]:
-            docs_scores = await self.vector_store.asimilarity_search_with_relevance_scores(query=query, k=top_k, score_threshold=similarity_threshold)
-            docs = [doc for doc, score in docs_scores]
-            return docs
-        
-        async def async_multy_query_search(self, queries: list[str], top_k_per_query: int = 5, similarity_threshold: int=0.80) -> list[Document]:
-            # Gather all search tasks concurrently
-            search_tasks = [self.async_search(query=query, top_k=top_k_per_query, similarity_threshold=similarity_threshold) for query in queries]
-            retrieved_results = await asyncio.gather(*search_tasks)
-    
-            # Process the retrieved documents
-            retrieved_chunks = {}
-            for retrieved in retrieved_results:
-                if retrieved:
-                    for document in retrieved:
-                        retrieved_chunks[document.metadata["_id"]] = document
-            return list(retrieved_chunks.values())
-        
-        async def async_add_documents(self, doc_generator, 
-            chunker: ABCChunker, 
-            document_batch_size: int=6,
-            max_concurrent_gpu_ops: int=5,
-            max_queued_batches: int=2
-        ) -> None:
-            """
-            Asynchronously process documents through a GPU-based chunker using a producer-consumer pattern.
-            
-            This implementation maintains high GPU utilization by preparing batches ahead of time while
-            the current batch is being processed. It uses a queue system to manage document batches and
-            controls GPU memory usage through semaphores.
-    
-            Args:
-                doc_generator: An async iterator yielding documents to process
-                chunker (BaseChunker): The chunker instance that will split documents using GPU or CPU
-                document_batch_size (int): Number of documents to process in each batch. Default: 6
-                max_concurrent_gpu_ops (int): Maximum number of concurrent GPU operations. Default: 5
-                max_queued_batches (int): Number of batches to prepare ahead in queue. Default: 2
-            """
-            gpu_semaphore = asyncio.Semaphore(max_concurrent_gpu_ops)
-            batch_queue = asyncio.Queue(maxsize=max_queued_batches)
+        if self.client.has_collection(collection_name=name):
+            self.vector_store = Milvus(
+                client=self.client,
+                collection_name=name,
+                embedding=self.embeddings,
+                sparse_embedding=self.sparse_embeddings,
+                retrieval_mode=self.retrieval_mode,
+            ) 
+            self.logger.warning(f"The Collection named `{name}` loaded.")
+        else:
+            self.vector_store = Milvus.construct_instance(
+                embedding=self.embeddings,
+                sparse_embedding=self.sparse_embeddings,
+                collection_name=name,
+                client_options={'port': self.port, 'host':self.host},
+                retrieval_mode=self.retrieval_mode,
+            )
+            self.logger.info(f"As the collection `{name}` is non-existant, it's created.")
 
-            async def chunk(doc, gpu_semaphore):
-                async with gpu_semaphore:
-                    chunks = await asyncio.to_thread(chunker.split_document, doc)
-                    self.logger.info(f"Processed doc: {doc.metadata['source']}")
-                    return chunks
-                
-            async def producer():
-                current_batch = []
-                try:
-                    async for doc in doc_generator:
-                        current_batch.append(doc)
-                        if len(current_batch) == document_batch_size:
-                            await batch_queue.put(current_batch)
-                            current_batch = []
+    async def get_collections(self) -> list[str]:
+        return [c.name for c in self.client.list_collections()]
+    
+    async def async_search(self, query: str, top_k: int = 5,similarity_threshold: int=0.80) -> list[Document]:
+        docs_scores = await self.vector_store.asimilarity_search_with_relevance_scores(query=query, k=top_k, score_threshold=similarity_threshold)
+        docs = [doc for doc, score in docs_scores]
+        return docs
+    
+    async def async_multy_query_search(self, queries: list[str], top_k_per_query: int = 5, similarity_threshold: int=0.80) -> list[Document]:
+        # Gather all search tasks concurrently
+        search_tasks = [self.async_search(query=query, top_k=top_k_per_query, similarity_threshold=similarity_threshold) for query in queries]
+        retrieved_results = await asyncio.gather(*search_tasks)
 
-                    if current_batch:
+        # Process the retrieved documents
+        retrieved_chunks = {}
+        for retrieved in retrieved_results:
+            if retrieved:
+                for document in retrieved:
+                    retrieved_chunks[document.metadata["_id"]] = document
+        return list(retrieved_chunks.values())
+    
+    async def async_add_documents(self, doc_generator, 
+        chunker: ABCChunker, 
+        document_batch_size: int=6,
+        max_concurrent_gpu_ops: int=5,
+        max_queued_batches: int=2
+    ) -> None:
+        """
+        Asynchronously process documents through a GPU-based chunker using a producer-consumer pattern.
+        
+        This implementation maintains high GPU utilization by preparing batches ahead of time while
+        the current batch is being processed. It uses a queue system to manage document batches and
+        controls GPU memory usage through semaphores.
+
+        Args:
+            doc_generator: An async iterator yielding documents to process
+            chunker (BaseChunker): The chunker instance that will split documents using GPU or CPU
+            document_batch_size (int): Number of documents to process in each batch. Default: 6
+            max_concurrent_gpu_ops (int): Maximum number of concurrent GPU operations. Default: 5
+            max_queued_batches (int): Number of batches to prepare ahead in queue. Default: 2
+        """
+        gpu_semaphore = asyncio.Semaphore(max_concurrent_gpu_ops)
+        batch_queue = asyncio.Queue(maxsize=max_queued_batches)
+
+        async def chunk(doc, gpu_semaphore):
+            async with gpu_semaphore:
+                chunks = await asyncio.to_thread(chunker.split_document, doc)
+                self.logger.info(f"Processed doc: {doc.metadata['source']}")
+                return chunks
+            
+        async def producer():
+            current_batch = []
+            try:
+                async for doc in doc_generator:
+                    current_batch.append(doc)
+                    if len(current_batch) == document_batch_size:
                         await batch_queue.put(current_batch)
-                    
-                finally:
-                    for _ in range(max_queued_batches):
-                        await batch_queue.put(None)
+                        current_batch = []
+
+                if current_batch:
+                    await batch_queue.put(current_batch)
                 
-            async def consumer(consumer_id=0):
-                while True:
-                    batch = await batch_queue.get()
-                    if batch is None:
-                        batch_queue.task_done()
-                        self.logger.info(f"Consumer {consumer_id} ended")
-                        break
-                    tasks = [asyncio.create_task(chunk(doc, gpu_semaphore)) for doc in batch]
-                    chunks_list = await asyncio.gather(*tasks, return_exceptions=True)
-                    all_chunks = sum(chunks_list, [])
-
-                    if all_chunks:
-                        await self.vector_store.aadd_documents(all_chunks)
-                        self.logger.info("INSERTED")
-                    batch_queue.task_done()
-
-            # Run producer and consumer concurrently
-            producer_task = asyncio.create_task(producer())
-            consumer_tasks = [asyncio.create_task(consumer(consumer_id=i)) for i in range(max_queued_batches)]
-
-            # Wait for producer to complete and queue to be empty
-            await producer_task
-            await batch_queue.join()
+            finally:
+                for _ in range(max_queued_batches):
+                    await batch_queue.put(None)
             
-            # Wait for all consumers to complete
-            await asyncio.gather(*consumer_tasks)
+        async def consumer(consumer_id=0):
+            while True:
+                batch = await batch_queue.get()
+                if batch is None:
+                    batch_queue.task_done()
+                    self.logger.info(f"Consumer {consumer_id} ended")
+                    break
+                tasks = [asyncio.create_task(chunk(doc, gpu_semaphore)) for doc in batch]
+                chunks_list = await asyncio.gather(*tasks, return_exceptions=True)
+                all_chunks = sum(chunks_list, [])
+
+                if all_chunks:
+                    await self.vector_store.aadd_documents(all_chunks)
+                    self.logger.info("INSERTED")
+                batch_queue.task_done()
+
+        # Run producer and consumer concurrently
+        producer_task = asyncio.create_task(producer())
+        consumer_tasks = [asyncio.create_task(consumer(consumer_id=i)) for i in range(max_queued_batches)]
+
+        # Wait for producer to complete and queue to be empty
+        await producer_task
+        await batch_queue.join()
+        
+        # Wait for all consumers to complete
+        await asyncio.gather(*consumer_tasks)
 
 class QdrantDB(ABCVectorDB):
     """
@@ -370,7 +370,8 @@ class QdrantDB(ABCVectorDB):
 
 class ConnectorFactory:
     CONNECTORS = {
-        "qdrant": QdrantDB
+        "qdrant": QdrantDB, 
+        "milvus": MilvusDB
     }
 
     @staticmethod
