@@ -4,7 +4,6 @@ from fastapi import APIRouter, HTTPException, status, File, UploadFile, Depends,
 from fastapi.responses import JSONResponse
 from pathlib import Path
 from crud.qdrant import QdrantCRUD
-from crud.milvus import MilvusCRUD
 from models.indexer import SearchRequest, DeleteFilesRequest
 from utils.dependencies import get_qdrant_crud
 from config.config import load_config
@@ -63,7 +62,7 @@ async def add_files(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/search/", response_model=None)
-async def search(query_params: SearchRequest, milvus_crud: MilvusCRUD = Depends(get_milvus_crud)):
+async def search(query_params: SearchRequest, qdrant_crud: QdrantCRUD = Depends(get_qdrant_crud)):
     try:
         # Extract query and top_k from request
         query = query_params.query
@@ -84,10 +83,10 @@ async def search(query_params: SearchRequest, milvus_crud: MilvusCRUD = Depends(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/delete-files/", response_model=None)
-async def delete_files(request: DeleteFilesRequest, milvus_crud: MilvusCRUD = Depends(get_milvus_crud)):
+@router.delete("/delete-files/",response_model=None)
+async def delete_files(request : DeleteFilesRequest, qdrant_crud: QdrantCRUD = Depends(get_qdrant_crud)):
     """
-    Delete points in Milvus associated with the given file names.
+    Delete points in Qdrant associated with the given file names.
 
     Args:
         file_names (List[str]): A list of file names whose points are to be deleted.
@@ -159,4 +158,3 @@ async def sync_db(qdrant_crud: QdrantCRUD = Depends(get_qdrant_crud)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-

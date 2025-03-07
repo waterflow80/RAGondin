@@ -13,8 +13,8 @@ qdrant_crud = QdrantCRUD(indexer)
 def get_qdrant_crud():
     return qdrant_crud
 
-# Instead of initializing QdrantCRUD, we initialize MilvusCRUD
-milvus_crud = MilvusCRUD(indexer)
+# # Instead of initializing QdrantCRUD, we initialize MilvusCRUD
+# milvus_crud = MilvusCRUD(indexer)
 
-def get_milvus_crud():
-    return milvus_crud
+# def get_milvus_crud():
+#     return milvus_crud

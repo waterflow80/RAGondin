@@ -6,8 +6,6 @@ from .chunker import ABCChunker, ChunkerFactory
 from .vectordb import ConnectorFactory, ABCVectorDB
 from langchain_core.documents.base import Document
 
-
-
 class Indexer:
     """This class bridges static files with the vector store database.
     """
@@ -19,7 +17,7 @@ class Indexer:
         self.logger = logger
         self.logger.info("Indexer initialized...")
         
-    async def add_files2vdb(self, path: str | list[str], metadata: Optional[Dict] = None, collection_name : Optional[str] = None):
+    async def add_files2vdb(self, path: str | list[str], metadata: Optional[Dict] = {}, collection_name : Optional[str] = None):
         """Add a files to the vector database in async mode"""
         try:
             doc_generator: AsyncGenerator[Document, None] = self.serializer.serialize_documents(path, metadata=metadata ,recursive=True)

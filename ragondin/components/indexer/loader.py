@@ -427,7 +427,7 @@ class DocSerializer:
         self.kwargs = kwargs
     
     # TODO: Add delete class obj
-    async def serialize_document(self, path: str, metadata: Optional[Dict] = None):
+    async def serialize_document(self, path: str, metadata: Optional[Dict] = {}):
         p = AsyncPath(path)
         if await p.is_file():
             type_ = p.suffix
@@ -435,7 +435,7 @@ class DocSerializer:
             logger.info(f'Loading {type_} files.')
             sub_url_path = Path(path).absolute().relative_to(self.data_dir)
             loader = loader_cls(**self.kwargs)  # Propagate kwargs here!
-            metadata={**{'source': str(path),'file_name': path.name ,'sub_url_path': sub_url_path,'page_sep': loader.page_sep},**metadata}
+            metadata={**{'source': str(path),'file_name': p.name ,'sub_url_path': str(sub_url_path),'page_sep': loader.page_sep},**metadata}
             logger.info(f"doc metadata: {metadata}")
             doc: Document = await loader.aload_document(
                 file_path=path,

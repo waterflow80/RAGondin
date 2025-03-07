@@ -56,7 +56,8 @@ class MilvusDB(ABCVectorDB):
         self.embeddings: Union[HuggingFaceBgeEmbeddings, HuggingFaceEmbeddings] = embeddings
         self.port = port
         self.host = host
-        self.client = MilvusClient(host=host, port=port, prefer_grpc=False)
+        self.uri = f"http://{host}:{port}"
+        self.client = MilvusClient(uri=self.uri)
         self.sparse_embeddings = BM25BuiltInFunction() if hybrid_mode else None
         self.retrieval_mode = RetrievalMode.HYBRID if hybrid_mode else RetrievalMode.DENSE
         logger.info(f"VectorDB retrieval mode: {self.retrieval_mode}")
@@ -78,24 +79,14 @@ class MilvusDB(ABCVectorDB):
         if not name:
             raise ValueError("Collection name cannot be empty.")
         
-        if self.client.has_collection(collection_name=name):
-            self.vector_store = Milvus(
-                client=self.client,
-                collection_name=name,
-                embedding=self.embeddings,
-                sparse_embedding=self.sparse_embeddings,
-                retrieval_mode=self.retrieval_mode,
-            ) 
-            self.logger.warning(f"The Collection named `{name}` loaded.")
-        else:
-            self.vector_store = Milvus.construct_instance(
-                embedding=self.embeddings,
-                sparse_embedding=self.sparse_embeddings,
-                collection_name=name,
-                client_options={'port': self.port, 'host':self.host},
-                retrieval_mode=self.retrieval_mode,
-            )
-            self.logger.info(f"As the collection `{name}` is non-existant, it's created.")
+        self.vector_store = Milvus(
+            connection_args={"uri": self.uri},
+            collection_name=name,
+            embedding_function=self.embeddings,
+            auto_id=True,
+            index_params={"metric_type": "IP"},
+        ) 
+        self.logger.info(f"The Collection named `{name}` loaded.")
 
     async def get_collections(self) -> list[str]:
         return [c.name for c in self.client.list_collections()]
@@ -122,7 +113,8 @@ class MilvusDB(ABCVectorDB):
         chunker: ABCChunker, 
         document_batch_size: int=6,
         max_concurrent_gpu_ops: int=5,
-        max_queued_batches: int=2
+        max_queued_batches: int=2,
+        collection_name: Optional[str]=None
     ) -> None:
         """
         Asynchronously process documents through a GPU-based chunker using a producer-consumer pattern.
@@ -138,12 +130,16 @@ class MilvusDB(ABCVectorDB):
             max_concurrent_gpu_ops (int): Maximum number of concurrent GPU operations. Default: 5
             max_queued_batches (int): Number of batches to prepare ahead in queue. Default: 2
         """
+        logger.info(f"Adding documents to collection: {collection_name}")
+        if collection_name:
+            self.collection_name = collection_name
+
         gpu_semaphore = asyncio.Semaphore(max_concurrent_gpu_ops)
         batch_queue = asyncio.Queue(maxsize=max_queued_batches)
 
         async def chunk(doc, gpu_semaphore):
             async with gpu_semaphore:
-                chunks = await asyncio.to_thread(chunker.split_document, doc)
+                chunks = await chunker.split_document(doc) # uses GPU
                 self.logger.info(f"Processed doc: {doc.metadata['source']}")
                 return chunks
             
@@ -166,17 +162,19 @@ class MilvusDB(ABCVectorDB):
         async def consumer(consumer_id=0):
             while True:
                 batch = await batch_queue.get()
-                if batch is None:
+                if batch is None:  # End signal
                     batch_queue.task_done()
                     self.logger.info(f"Consumer {consumer_id} ended")
                     break
-                tasks = [asyncio.create_task(chunk(doc, gpu_semaphore)) for doc in batch]
+                
+                tasks = [chunk(doc, gpu_semaphore) for doc in batch]
                 chunks_list = await asyncio.gather(*tasks, return_exceptions=True)
                 all_chunks = sum(chunks_list, [])
-
+                
                 if all_chunks:
                     await self.vector_store.aadd_documents(all_chunks)
                     self.logger.info("INSERTED")
+                    
                 batch_queue.task_done()
 
         # Run producer and consumer concurrently
